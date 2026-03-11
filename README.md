@@ -2,7 +2,7 @@
 
 A terminal command assistant that gives you answers, not essays.
 
-Powered by **Gemini 3.1 Flash Lite** — responses come back near-instantly.
+Powered by **Gemini 3.1 Flash Lite** — streams responses to your terminal with zero dependencies. Just Python 3.
 
 ## What it does
 
@@ -36,8 +36,9 @@ everyone should be able to run but only the owner can edit.
 
 ```bash
 git clone https://github.com/dhanaway/terminal-agent.git
-pip3 install google-genai
 ```
+
+No dependencies to install — just Python 3 (already on your machine).
 
 Add to your PATH:
 

@@ -1,21 +1,14 @@
 #!/usr/bin/env python3
-"""Ultra-concise terminal assistant powered by Gemini 3 Flash."""
+"""Ultra-concise terminal assistant powered by Gemini 3.1 Flash Lite. Zero dependencies."""
 
 import sys
 import os
+import json
+import urllib.request
 
-try:
-    from google import genai
-except ImportError:
-    print("Run: pip3 install google-genai")
-    sys.exit(1)
+SYSTEM = "You are a terminal command assistant. Rules:\n- Default: give ONLY the command. No explanation, no markdown fences, no preamble.\n- If no single command answers it, use a short bulleted list (2-5 items max).\n- Never say \"sure\", \"here you go\", or any filler.\n- Only explain if the user explicitly says \"explain\" or \"why\".\n- Prefer one-liners. Be terse."
 
-SYSTEM = """You are a terminal command assistant. Rules:
-- Default: give ONLY the command. No explanation, no markdown fences, no preamble.
-- If no single command answers it, use a short bulleted list (2-5 items max).
-- Never say "sure", "here you go", or any filler.
-- Only explain if the user explicitly says "explain" or "why".
-- Prefer one-liners. Be terse."""
+MODEL = "gemini-3.1-flash-lite-preview"
 
 def main():
     if len(sys.argv) < 2:
@@ -28,16 +21,43 @@ def main():
         sys.exit(1)
 
     query = " ".join(sys.argv[1:])
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
-        model="gemini-3.1-flash-lite-preview",
-        config={
-            "system_instruction": SYSTEM,
-            "temperature": 0.1,
-        },
-        contents=query,
-    )
-    print(response.text.strip())
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:streamGenerateContent?alt=sse&key={api_key}"
+
+    body = json.dumps({
+        "system_instruction": {"parts": [{"text": SYSTEM}]},
+        "contents": [{"parts": [{"text": query}]}],
+        "generationConfig": {"temperature": 0.1},
+    }).encode()
+
+    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+
+    first = True
+    try:
+        with urllib.request.urlopen(req) as resp:
+            for line in resp:
+                line = line.decode().strip()
+                if not line.startswith("data: "):
+                    continue
+                chunk = json.loads(line[6:])
+                parts = chunk.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+                for part in parts:
+                    text = part.get("text", "")
+                    if text:
+                        if first:
+                            text = text.lstrip()
+                            first = False
+                        sys.stdout.write(text)
+                        sys.stdout.flush()
+            if not first:
+                print()
+    except urllib.error.HTTPError as e:
+        err = e.read().decode()
+        try:
+            msg = json.loads(err)["error"]["message"]
+        except Exception:
+            msg = err
+        print(f"Error: {msg}", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
